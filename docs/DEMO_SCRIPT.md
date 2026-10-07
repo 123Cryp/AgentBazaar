@@ -16,7 +16,7 @@
 
 Add: (a) 20 s on proof-of-control and prompt-injection defences (quotes must appear in the source), (b) 30 s on the
 anti-farming rules (same-pair decay, weight cap, distinct clients for top tiers), (c) 30 s on a failed job: refund,
-negative reputation, (d) 20 s on tests: 161 offline tests and 57 mutants, all caught.
+negative reputation, (d) 20 s on tests: 171 offline tests and 61 mutants, all caught.
 
 ## Storyboard checklist
 
