@@ -224,6 +224,46 @@ class AntiGamingTests(LedgerBase):
         self.assertEqual(p["success_bps"], 3333)
 
 
+class DustSybilTests(LedgerBase):
+    def test_dust_jobs_from_sybil_clients_do_not_unlock_top_tiers(self):
+        for _ in range(3):
+            aid = self.new_id()
+            self.link(aid)
+            self.record("SETTLED", amount=10 * GEN, aid=aid)
+        for i in range(4):
+            aid = self.new_id()
+            self.link(aid)
+            self.record("SETTLED", amount=GEN // 20, buyer=addr(0xE000 + i), aid=aid)
+        p = self.profile()
+        self.assertEqual((p["completed"], p["qualified_completed"], p["distinct_clients"]), (7, 3, 1))
+        self.assertGreaterEqual(p["score"], 900)
+        self.assertEqual(p["tier"], "ESTABLISHED")
+
+    def test_tiers_count_only_qualified_completions(self):
+        for i in range(2):
+            aid = self.new_id()
+            self.link(aid)
+            self.record("SETTLED", amount=10 * GEN, buyer=addr(0xF100 + i), aid=aid)
+        for i in range(3):
+            aid = self.new_id()
+            self.link(aid)
+            self.record("SETTLED", amount=GEN // 20, buyer=addr(0xF200 + i), aid=aid)
+        p = self.profile()
+        self.assertEqual((p["completed"], p["qualified_completed"], p["distinct_clients"]), (5, 2, 2))
+        self.assertGreaterEqual(p["score"], 700)
+        self.assertEqual(p["tier"], "ESTABLISHED")
+
+    def test_a_dust_job_does_not_consume_the_pair_decay(self):
+        aid = self.new_id()
+        self.link(aid)
+        self.record("SETTLED", amount=GEN // 20, aid=aid)
+        aid = self.new_id()
+        self.link(aid)
+        self.record("SETTLED", amount=10 * GEN, aid=aid)
+        o = self.b.view(self.led, "get_outcome", aid)
+        self.assertEqual((o["pair_index"], o["points"]), (1, 100 * 100))
+
+
 class ScoreTests(LedgerBase):
     def test_score_formula_and_weight_table(self):
         table = {UNIT - 1: 0, UNIT: 1, 4 * UNIT: 4, 1 * GEN: 10, 10 * GEN: 100, 1000 * GEN: 100, 10 ** 24: 100}
@@ -304,6 +344,16 @@ class ViewTests(LedgerBase):
         for args in ((-1, 5), (0, 0), (0, 101)):
             expect_raises(lambda args=args: self.b.view(self.led, "list_outcomes", *args), "limit")
             expect_raises(lambda args=args: self.b.view(self.led, "list_agent_outcomes", str(AGENT1), *args), "limit")
+
+    def test_the_ledger_keeps_per_worker_history_in_indexed_storage_only(self):
+        import inspect
+        for i in range(4):
+            self.record("SETTLED", amount=GEN, buyer=addr(0xD000 + i))
+        self.assertEqual(self.b.view(self.led, "get_profile", str(AGENT1))["outcome_count"], 4)
+        src = inspect.getsource(type(self.b.w.instance(self.led)))
+        self.assertNotIn('+ "," +', src)
+        self.assertNotIn('.split(",")', src)
+        self.assertNotIn("outcome_ids", src)
 
     def test_info_reports_the_scoring_parameters(self):
         info = self.b.view(self.led, "get_info")

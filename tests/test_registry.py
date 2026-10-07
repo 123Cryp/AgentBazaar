@@ -72,6 +72,13 @@ class RegistrationTests(RegistryBase):
             "https://raw.githubusercontent.com/a b/c.md": "ASCII",
             "https://raw.githubusercontent.com/" + "a" * 300: "too long",
             "ftp://raw.githubusercontent.com/a.md": "https",
+            "https://github.com/famous/agent/issues/5": "owner controls",
+            "https://github.com/famous/agent/pull/7": "owner controls",
+            "https://github.com/famous/agent/discussions/3": "owner controls",
+            "https://github.com/famous/agent/wiki/Home": "owner controls",
+            "https://github.com/famous/agent/commit/abc": "owner controls",
+            "https://gitlab.com/famous/agent/-/issues/1": "owner controls",
+            "https://gitlab.com/famous/agent/-/merge_requests/1": "owner controls",
         }
         for url, frag in cases.items():
             expect_raises(lambda url=url: self.b.tx(AGENT1, self.reg, "register_agent", "Alpha Agent", url, "code review"), frag)
