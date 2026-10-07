@@ -106,15 +106,13 @@ const DEMO = (() => {
 async function loadSdk() {
   if (state.gl) return state.gl;
   state.gl = await import("https://esm.sh/genlayer-js@latest");
-  const chains = await import("https://esm.sh/genlayer-js@latest/chains");
-  state.chains = chains;
   return state.gl;
 }
 async function getClient() {
   const sdk = await loadSdk();
   const key = state.account || "";
   if (!state.client || state.clientKey !== key) {
-    const cfg = { chain: state.chains.studionet };
+    const cfg = { chain: sdk.chains.studionet };
     if (state.account) cfg.account = state.account;
     state.client = sdk.createClient(cfg);
     state.clientKey = key;
@@ -142,10 +140,12 @@ async function write(contract, method, args = [], value = 0n) {
   const client = await getClient();
   toast("Confirm in your wallet...");
   const hash = await client.writeContract({ address, functionName: method, args, value });
-  toast("Sent " + hash + ". Waiting for consensus (can take a minute)...", 20000);
+  toast("Sent " + hash + ". Waiting for validator consensus (often 1-3 minutes)...", 30000);
   const SDK = await loadSdk();
-  const receipt = await client.waitForTransactionReceipt({ hash, status: SDK.TransactionStatus ? SDK.TransactionStatus.ACCEPTED : "ACCEPTED", retries: 120, interval: 5000 });
-  toast("Done: " + hash);
+  const receipt = await client.waitForTransactionReceipt({ hash, waitUntil: "decided", retries: 120, interval: 5000 });
+  const ok = typeof SDK.isSuccessful === "function" ? SDK.isSuccessful(receipt) : true;
+  if (!ok) throw new Error("The transaction was decided but the contract rejected it. Details: " + EXPLORER + "/tx/" + hash);
+  toast("Done. Explorer: " + EXPLORER + "/tx/" + hash, 12000);
   return { hash, receipt };
 }
 function demoRead(contract, method, args) {
@@ -243,7 +243,7 @@ async function viewJob(id) {
       <div class="kv"><b>Outcome</b>${esc(j.outcome || "-")}</div></div>
       <pre>${esc(j.spec)}</pre></div>
     ${sync}${settle}<p>${cancel} ${expire}</p>
-    <h2>Bids (ranked by fit, claims, reputation, price)</h2>${bidRows || '<p class="muted">No bids yet.</p>'}
+    <h2>Bids (ranked by fit, claims, reputation, price)</h2><p class="muted">Validators judge each pitch and quote their evidence. AI never picks the winner: the client decides, and only strong or partial fits can be selected.</p>${bidRows || '<p class="muted">No bids yet.</p>'}
     ${bidForm}${linkForm}`;
 }
 
@@ -293,8 +293,8 @@ function viewPost() {
     <label>Title</label><input id="p-title" maxlength="120">
     <label>Specification (20-3000 characters)</label><textarea id="p-spec"></textarea>
     <label>Budget (GEN)</label><input id="p-budget" inputmode="decimal" placeholder="5">
-    <label>Bid window</label><select id="p-window"><option value="2">2 hours</option><option value="24" selected>24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select>
-    <p class="muted">The Studio test build counts one "hour" as one minute.</p>
+    <label>Bid window</label><select id="p-window"><option value="3">3 hours</option><option value="24" selected>24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select>
+    <p class="muted">The Studio test build counts one "hour" as one minute, so 3 hours there means 3 minutes.</p>
     <p><button data-act="post" type="button">Post job</button></p></div>`;
 }
 function viewRegister() {
@@ -325,14 +325,15 @@ const actions = {
   },
   async post() {
     const budget = toWei($("#p-budget").value);
-    const deadline = Math.floor(Date.now() / 1000) + Number($("#p-window").value) * 3600 / (state.windowUnit ? 3600 / state.windowUnit : 1);
-    await write("market", "post_job", [$("#p-title").value.trim(), $("#p-spec").value.trim(), budget.toString(), Math.floor(deadline)]);
+    const unit = state.windowUnit || 3600;
+    const deadline = Math.floor(Date.now() / 1000) + Number($("#p-window").value) * unit + 120;
+    await write("market", "post_job", [$("#p-title").value.trim(), $("#p-spec").value.trim(), budget, deadline]);
   },
   async register() {
     await write("registry", "register_agent", [$("#r-name").value.trim(), $("#r-url").value.trim(), $("#r-caps").value.trim()]);
   },
   async bid(el, id) {
-    await write("market", "submit_bid", [id, toWei($("#bid-price").value).toString(), $("#bid-pitch").value.trim()]);
+    await write("market", "submit_bid", [id, toWei($("#bid-price").value), $("#bid-pitch").value.trim()]);
   },
   async assess(el) { await write("market", "assess_bid", [el.dataset.id]); },
   async select(el, id) { await write("market", "select_bid", [id, el.dataset.id]); },
