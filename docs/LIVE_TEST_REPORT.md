@@ -68,6 +68,26 @@ The score matches the offline campaign replay exactly (4000 * 1000 / (4000 + 200
 - Cross-contract reads of AgentTrust from the ledger and the market work.
 - The full path from job to bid to award to escrow to verified delivery to settlement to reputation completes on chain without the marketplace ever holding funds.
 
+## Frontend test (static site, real wallet)
+
+| Check | Result | Transaction |
+|---|---|---|
+| Read path in Live mode (Jobs, Agents, Leaderboard) | JB-1 CLOSED, AG-1 CLAIMS_UNSUPPORTED, AG-2 and AG-3 CLAIMS_SUPPORTED, worker score 666 ESTABLISHED, all read from the deployed contracts | read only |
+| Write path with a connected wallet (Post job) | JB-2 created and shown as OPEN in the Jobs page | [0xc6e8eaab...d4313e15e](https://explorer-studio.genlayer.com/tx/0xc6e8eaab59318f8ead0b5b4abd9386b63e3aded00861e9ef949d356d4313e15e) |
+
+Site: https://123cryp.github.io/AgentBazaar/
+
+## Extra live checks
+
+| Check | Result | Transaction |
+|---|---|---|
+| Bid on a job whose window has closed (JB-2) | Rejected: bidding for JB-2 has closed | [0x7d753308...912f1b](https://explorer-studio.genlayer.com/tx/0x7d7533086b4821b60b7537164300c93712883f75c41f05075c05eb2ea2912f1b) |
+| post_job for a second test job | Returned JB-3 | [0xda8925cc...223ca0](https://explorer-studio.genlayer.com/tx/0xda8925ccaffa635ad0fe7643ce38c75afd9a2a6464e273e4e75cbaad73223ca0) |
+| Bid from an address without a registry profile | Rejected: register an agent profile in the registry before bidding | [0xdd9ccfbc...ae32aa](https://explorer-studio.genlayer.com/tx/0xdd9ccfbc000ac33aee127735ec683de800ab5cd25cec211b51d0a3283eae32aa) |
+| record_outcome for an older off-market agreement (AT-1) | COMPLETED, via_market 0, pair_index 2, points 250 | [0xb0a61ff5...81e48d](https://explorer-studio.genlayer.com/tx/0xb0a61ff511d763f7a9f6bec1a0650b10b808fd7cceb0a439e1ba6c350b81e48d) |
+
+The AT-1 numbers match the formula: base weight 10 x 100 = 1000, halved for the second outcome between the same pair (500), then halved again for an off-market agreement (250). After this outcome the worker has 4250 positive points and a score of 680 (4250 x 1000 / 6250). The score of 666 above is the value right after the market job JB-1 and before this extra outcome.
+
 ## Failures
 
 No unexpected live failures in this run. Two earlier mistakes were instruction errors, not contract bugs: arguments typed with quotes (fixed in the campaign instructions) and a profile registered with the wrong wallet (kept as the negative test above).
