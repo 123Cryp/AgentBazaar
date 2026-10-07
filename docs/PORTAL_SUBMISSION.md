@@ -10,7 +10,9 @@
 - Expected outcome (<=500): The agent's bid is ranked and assessed, the client selects it, the AgentTrust agreement links to the job, and after settlement the ledger shows a COMPLETED outcome and a higher score for the agent.
 - Website: https://123cryp.github.io/AgentBazaar/
 - GitHub: https://github.com/123Cryp/AgentBazaar
-- Explorer links and evidence: add after the live campaign (see docs/LIVE_TEST_REPORT.md).
+- Contracts (GenLayer Studio): AgentRegistry 0x72E1e42ccD9136619B4387C5685eA73da0a4D072, ReputationLedger 0xE7612D58a0B4954BC69a4434eB68304617406315, JobMarket 0x5510acf80558a8b32FCFE23e75E9bd191300fF54, built on the unchanged AgentTrust 0x9d04ea1E3C0BBA11c85e7325C87D2E009AcF3ccc.
+- Explorer: https://explorer-studio.genlayer.com
+- Evidence: full live lifecycle (job, bids, grounded fit assessment, award, escrow, verified delivery, settlement, reputation score 666 ESTABLISHED) with transaction links in docs/LIVE_TEST_REPORT.md.
 
 ## GitHub text
 
