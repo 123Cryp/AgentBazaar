@@ -26,6 +26,9 @@ adds discovery, bidding, fit assessment and reputation around it.
 
 See `docs/ARCHITECTURE.md` for state machines, authorization, economics and the threat model.
 
+AI never picks the winner. Validators provide auditable evidence (a fit label with exact quotes); the client decides,
+and only strong or partial fits can be selected.
+
 ## GenLayer features used
 
 - `gl.vm.run_nondet_unsafe` with a leader and a validator function, and `prompt_comparative` equivalence on the verdict field only
@@ -36,9 +39,9 @@ See `docs/ARCHITECTURE.md` for state machines, authorization, economics and the 
 ## Test
 
 ```
-python3 -m unittest discover          # 161 offline tests, no dependencies
+python3 -m unittest discover          # 171 offline tests, no dependencies
 python3 scripts/deploy/check_contract.py   # Studio format lint
-python3 scripts/mutation_check.py     # 57 mutants, all must be killed
+python3 scripts/mutation_check.py     # 61 mutants, all must be killed
 ```
 
 The offline suite runs the contracts on a strict stub SDK, including full lifecycles against the real AgentTrust code.
