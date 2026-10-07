@@ -106,6 +106,7 @@ def _classify(status: str, amount: int, to_worker: int, to_buyer: int, accepted_
 class Profile:
     address: str
     completed: u256
+    qualified_completed: u256
     refunded: u256
     disputed_lost: u256
     disputed_won: u256
@@ -118,7 +119,6 @@ class Profile:
     distinct_clients: u256
     first_at: u256
     last_at: u256
-    outcome_ids: str
 
 
 @allow_storage
@@ -144,6 +144,8 @@ class ReputationLedger(gl.Contract):
     outcomes: TreeMap[str, Outcome]
     market_links: TreeMap[str, str]
     pair_counts: TreeMap[str, u256]
+    worker_items: TreeMap[str, str]
+    worker_counts: TreeMap[str, u256]
     worker_list: DynArray[str]
     outcome_list: DynArray[str]
     owner: str
@@ -171,7 +173,7 @@ class ReputationLedger(gl.Contract):
         if p is None:
             return {
                 "address": who, "known": 0, "completed": 0, "refunded": 0, "disputed_lost": 0, "disputed_won": 0,
-                "unaccepted": 0, "market_completed": 0, "total_earned": "0", "total_volume": "0", "pos_points": 0,
+                "unaccepted": 0, "market_completed": 0, "qualified_completed": 0, "total_earned": "0", "total_volume": "0", "pos_points": 0,
                 "neg_points": 0, "distinct_clients": 0, "score": 0, "success_bps": 0, "tier": "NEW", "first_at": 0,
                 "last_at": 0, "outcome_count": 0,
             }
@@ -179,16 +181,16 @@ class ReputationLedger(gl.Contract):
         neg = int(p.neg_points)
         score = _score(pos, neg)
         completed = int(p.completed)
-        ids = [] if p.outcome_ids == "" else str(p.outcome_ids).split(",")
+        wc = self.worker_counts.get(str(p.address))
         return {
             "address": str(p.address), "known": 1, "completed": completed, "refunded": int(p.refunded),
             "disputed_lost": int(p.disputed_lost), "disputed_won": int(p.disputed_won), "unaccepted": int(p.unaccepted),
-            "market_completed": int(p.market_completed), "total_earned": str(int(p.total_earned)),
+            "market_completed": int(p.market_completed), "qualified_completed": int(p.qualified_completed), "total_earned": str(int(p.total_earned)),
             "total_volume": str(int(p.total_volume)), "pos_points": pos, "neg_points": neg,
             "distinct_clients": int(p.distinct_clients), "score": score,
             "success_bps": _success_bps(completed, int(p.refunded), int(p.disputed_lost)),
-            "tier": _tier(1, score, completed, int(p.distinct_clients)), "first_at": int(p.first_at), "last_at": int(p.last_at),
-            "outcome_count": len(ids),
+            "tier": _tier(1, score, int(p.qualified_completed), int(p.distinct_clients)), "first_at": int(p.first_at), "last_at": int(p.last_at),
+            "outcome_count": 0 if wc is None else int(wc),
         }
 
     def _outcome_dict(self, o: Outcome) -> dict:
@@ -260,11 +262,12 @@ class ReputationLedger(gl.Contract):
         pos = 0
         neg = 0
         earned = 0
-        if kind == K_COMPLETED or kind == K_COMPLETED_DISPUTE:
+        if (kind == K_COMPLETED or kind == K_COMPLETED_DISPUTE) and base > 0:
             pair_index += 1
             pos = base // pair_index
             if via_market == 0:
                 pos = (pos * OFF_MARKET_PERCENT) // 100
+        if kind == K_COMPLETED or kind == K_COMPLETED_DISPUTE:
             earned = to_worker
         elif kind == K_REFUNDED or kind == K_DISPUTED_LOST:
             neg = base * NEG_FACTOR
@@ -272,10 +275,10 @@ class ReputationLedger(gl.Contract):
         p = self.profiles.get(worker)
         if p is None:
             self.profiles[worker] = Profile(
-                address=worker, completed=u256(0), refunded=u256(0), disputed_lost=u256(0), disputed_won=u256(0),
+                address=worker, completed=u256(0), qualified_completed=u256(0), refunded=u256(0), disputed_lost=u256(0), disputed_won=u256(0),
                 unaccepted=u256(0), market_completed=u256(0), total_earned=u256(0), total_volume=u256(0),
                 pos_points=u256(0), neg_points=u256(0), distinct_clients=u256(0), first_at=u256(now),
-                last_at=u256(now), outcome_ids="",
+                last_at=u256(now),
             )
             self.worker_list.append(worker)
             p = self.profiles.get(worker)
@@ -285,9 +288,11 @@ class ReputationLedger(gl.Contract):
                 p.disputed_won = u256(int(p.disputed_won) + 1)
             if via_market == 1:
                 p.market_completed = u256(int(p.market_completed) + 1)
-            if pair_prev is None:
-                p.distinct_clients = u256(int(p.distinct_clients) + 1)
-            self.pair_counts[pair_key] = u256(pair_index)
+            if base > 0:
+                p.qualified_completed = u256(int(p.qualified_completed) + 1)
+                if pair_prev is None:
+                    p.distinct_clients = u256(int(p.distinct_clients) + 1)
+                self.pair_counts[pair_key] = u256(pair_index)
         elif kind == K_REFUNDED:
             p.refunded = u256(int(p.refunded) + 1)
         elif kind == K_DISPUTED_LOST:
@@ -300,7 +305,10 @@ class ReputationLedger(gl.Contract):
         p.pos_points = u256(int(p.pos_points) + pos)
         p.neg_points = u256(int(p.neg_points) + neg)
         p.last_at = u256(now)
-        p.outcome_ids = agreement_id if p.outcome_ids == "" else str(p.outcome_ids) + "," + agreement_id
+        wc = self.worker_counts.get(worker)
+        wn = 0 if wc is None else int(wc)
+        self.worker_items[worker + "#" + str(wn)] = agreement_id
+        self.worker_counts[worker] = u256(wn + 1)
         self.outcomes[agreement_id] = Outcome(
             agreement_id=agreement_id, worker=worker, buyer=buyer, amount=u256(amount), status=status, kind=kind,
             via_market=u256(via_market), job_id=job_id, pair_index=u256(pair_index), points=u256(pos),
@@ -359,11 +367,16 @@ class ReputationLedger(gl.Contract):
         if offset < 0 or limit < 1 or limit > MAX_PAGE_SIZE:
             raise Exception("offset must be >= 0 and limit between 1 and " + str(MAX_PAGE_SIZE))
         p = self.profiles.get(str(address).strip().lower())
-        if p is None or p.outcome_ids == "":
+        if p is None:
             return []
-        ids = str(p.outcome_ids).split(",")
-        ids.reverse()
-        return [self._outcome_dict(self.outcomes.get(i)) for i in ids[offset:offset + limit]]
+        who = str(p.address)
+        wc = self.worker_counts.get(who)
+        out = []
+        pos = (0 if wc is None else int(wc)) - 1 - offset
+        while pos >= 0 and len(out) < limit:
+            out.append(self._outcome_dict(self.outcomes.get(str(self.worker_items.get(who + "#" + str(pos))))))
+            pos -= 1
+        return out
 
     @gl.public.view
     def list_leaderboard(self, limit: int) -> list:

@@ -33,6 +33,8 @@ MAX_PAGE_SIZE = 100
 RAW_HOSTS = {"raw.githubusercontent.com", "gist.githubusercontent.com"}
 PAGE_HOSTS = {"github.com", "gitlab.com"}
 PAGE_SUFFIXES = (".github.io",)
+SHARED_SEGMENTS = {"issues", "pull", "pulls", "discussions", "wiki", "wikis", "commit", "commits", "compare",
+                   "merge_requests", "snippets", "notes", "comments", "orgs", "users", "search", "topics", "marketplace"}
 
 _ADDR_RE = re.compile(r"^0x[0-9a-fA-F]{40}\Z")
 _AGENT_RE = re.compile(r"^AG-[0-9]{1,9}\Z")
@@ -142,6 +144,10 @@ def _parse_profile_url(value) -> str:
     for suffix in PAGE_SUFFIXES:
         if host.endswith(suffix) and len(host) > len(suffix):
             allowed = True
+    if host in PAGE_HOSTS:
+        for seg in parts.path.lower().split("/"):
+            if seg in SHARED_SEGMENTS:
+                raise Exception("profile_url must be a page the owner controls, not an issue, pull request, discussion, wiki, commit or comment page")
     if not allowed:
         raise Exception("profile_url host is not allowed; use raw.githubusercontent.com, github.com, gist.githubusercontent.com, gitlab.com or a github.io page")
     return url
